@@ -1,0 +1,159 @@
+/* Badge container on top of each classified headline */
+.advisor-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;        /* TOP RIGHT CORNER OF HEADLINE */
+  left: auto;
+  z-index: 999999;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* We attach this class to headline elements so the badge positions correctly */
+.advisor-target {
+  position: relative !important;
+}
+
+.advisor-badge .shape {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Green circle = genuine news */
+.advisor-badge.news .shape {
+  background: #2ecc71;
+  border-radius: 50%;
+}
+
+/* Purple square = sponsored content */
+.advisor-badge.sponsored .shape {
+  background: #8e44ad;
+  border-radius: 3px;
+}
+
+/* Red cross = ad */
+.advisor-badge.ad .shape {
+  border-radius: 2px;
+}
+
+.advisor-badge.ad .shape::before,
+.advisor-badge.ad .shape::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 6px;
+  width: 2px;
+  height: 12px;
+  background: #e74c3c;
+}
+
+.advisor-badge.ad .shape::after {
+  transform: rotate(90deg);
+}
+
+/* Focus Mode: de-emphasize ads/sponsored.
+   This will dim the whole card/article (we set data-advisor-type on the block). */
+body.news-focus-mode [data-advisor-type="ad"],
+body.news-focus-mode [data-advisor-type="sponsored"] {
+  opacity: 0.25 !important;
+  filter: grayscale(0.8) !important;
+}
+
+/* Tooltip bubble (for the separate tooltip feature) */
+#advisor-tooltip {
+  position: fixed;
+  z-index: 9999999;
+  max-width: 260px;
+  background: #1e1e24;
+  color: #ffffff;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  display: none;
+  pointer-events: none;
+}
+
+#advisor-tooltip strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* Transparency Panel (sidebar) */
+#advisor-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 320px;
+  max-width: 90vw;
+  height: 100vh;
+  background: #fdfdfd;
+  border-left: 1px solid #ddd;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
+  z-index: 9999998;
+  transform: translateX(100%);
+  transition: transform 0.25s ease-out;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+#advisor-panel.open {
+  transform: translateX(0);
+}
+
+#advisor-panel-header {
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #eee;
+  background: #f4f4f8;
+}
+
+#advisor-panel-header h2 {
+  font-size: 14px;
+  margin: 0;
+}
+
+#advisor-panel-close {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+#advisor-panel-body {
+  padding: 10px 12px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+#advisor-panel-body h3 {
+  font-size: 13px;
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+
+#advisor-panel-body ul {
+  padding-left: 18px;
+}
+
+#advisor-panel-body code {
+  background: #efefef;
+  padding: 1px 3px;
+  border-radius: 3px;
+  font-size: 12px;
+}

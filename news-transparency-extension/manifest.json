@@ -1,0 +1,31 @@
+{
+    "manifest_version": 3,
+    "name": "News Transparency Overlay",
+    "version": "1.0.0",
+    "description": "Helps distinguish genuine journalism from ads and sponsored content with overlays, focus mode, tooltips, and a transparency panel.",
+    "permissions": [
+      "activeTab",
+      "scripting",
+      "storage"
+    ],
+    "action": {
+      "default_popup": "popup/popup.html",
+      "default_title": "News Transparency"
+    },
+    "content_scripts": [
+      {
+        "matches": [
+          "http://*/*",
+          "https://*/*"
+        ],
+        "js": [
+          "content/content.js"
+        ],
+        "css": [
+          "content/content.css"
+        ],
+        "run_at": "document_idle"
+      }
+    ]
+  }
+  
