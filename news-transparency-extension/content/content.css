@@ -74,7 +74,6 @@
   filter: brightness(1.1);
 }
 
-/* --- Panel & Tooltip --- */
 #advisor-tooltip {
   position: absolute;
   background: #222;
@@ -228,4 +227,30 @@
   background-color: #fffbdd;
   color: #b08800;
   font-weight: bold;
+}
+
+/* prob don't need this fixed elsewhere: CLIPPING ESCAPE HATCH */
+.trc_rbox .sponsored,
+.ob-widget .ob-unit,
+.ob-widget .ob-rec-text-wrapper,
+.ob-widget .ob-rec-source-wrapper {
+  position: static !important;
+  transform: none !important;
+  opacity: 1 !important;
+  overflow: visible !important;
+}
+
+/* FOCUS MODE */
+body.news-focus-mode [data-advisor-status='advisor-status-ad'],
+body.news-focus-mode [data-advisor-status='advisor-status-sponsored'] {
+  opacity: 0.15 !important;
+  filter: grayscale(100%) !important;
+  transition: all 0.3s ease;
+}
+
+/* Hover to reveal */
+body.news-focus-mode [data-advisor-status='advisor-status-ad']:hover,
+body.news-focus-mode [data-advisor-status='advisor-status-sponsored']:hover {
+  opacity: 1 !important;
+  filter: none !important;
 }

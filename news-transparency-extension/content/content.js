@@ -1,5 +1,4 @@
-// CONFIGURATION & CONSTANTS
-
+// CONFIG & CONSTS
 const AD_DOMAINS = [
   'doubleclick.net',
   'googleadservices.com',
@@ -57,7 +56,7 @@ let panelBodyEl = null;
 let linkObserver = null;
 let mutationObserver = null;
 
-//INITIALIZATION
+// INITIALIZATION
 
 chrome.storage.sync.get(DEFAULT_SETTINGS, (stored) => {
   currentSettings = { ...DEFAULT_SETTINGS, ...stored };
@@ -113,6 +112,11 @@ function cleanupAdvisor() {
       el.classList.remove('advisor-group-sponsored', 'advisor-group-ad');
     });
 
+  // Remove data attributes used for Focus Mode
+  document.querySelectorAll('[data-advisor-status]').forEach((el) => {
+    el.removeAttribute('data-advisor-status');
+  });
+
   document.querySelectorAll('[data-advisor-processed]').forEach((el) => {
     delete el.dataset.advisorProcessed;
   });
@@ -129,7 +133,8 @@ function applyFocusMode() {
   }
 }
 
-// OBSERVERS
+//OBSERVERS
+
 function setupIntersectionObserver() {
   if (linkObserver) linkObserver.disconnect();
 
@@ -203,7 +208,7 @@ function scanNewNodes(nodeList) {
   });
 }
 
-//CORE LOGIC
+// CORE LOGIC
 
 function processSingleElement(el) {
   if (el.dataset.advisorProcessed) return;
@@ -219,6 +224,8 @@ function processSingleElement(el) {
           'Contains external sponsored links.',
         ],
       });
+      // MARK CONTAINER FOR FOCUS MODE
+      el.setAttribute('data-advisor-status', TYPE_SPONSORED);
       el.dataset.advisorProcessed = 'true';
       return;
     }
@@ -232,6 +239,8 @@ function processSingleElement(el) {
           'Treated as single sponsored zone.',
         ],
       });
+      // MARK CONTAINER FOR FOCUS MODE
+      el.setAttribute('data-advisor-status', TYPE_SPONSORED);
       el.dataset.advisorProcessed = 'true';
       return;
     }
@@ -265,6 +274,11 @@ function processSingleElement(el) {
 
   if (classification.type !== TYPE_NEUTRAL) {
     applyBadge(el, classification);
+
+    // MARK CONTAINER FOR FOCUS MODE
+    if (container) {
+      container.setAttribute('data-advisor-status', classification.type);
+    }
   }
 
   el.dataset.advisorProcessed = 'true';
@@ -369,6 +383,9 @@ function processIframe(frame) {
     } else {
       applyOverlayBadge(frame, classification.type, classification);
     }
+
+    // MARK FOR FOCUS MODE
+    frame.setAttribute('data-advisor-status', classification.type);
   }
 
   frame.dataset.advisorProcessed = 'true';
@@ -548,6 +565,7 @@ function setupBadgeEvents(badge, targetSource, type, classificationData) {
 }
 
 // DOM HELPERS & UI
+
 function findInjectionPoint(rootElement) {
   const candidates = rootElement.querySelectorAll(
     'h1, h2, h3, h4, h5, h6, span, div, p, strong, b, em'
