@@ -1,53 +1,81 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>News Transparency</title>
-  <link rel="stylesheet" href="popup.css" />
-</head>
-<body>
-  <header>
-    <h1>News Transparency</h1>
-    <label class="switch">
-      <input type="checkbox" id="extensionEnabled">
-      <span class="slider"></span>
-    </label>
-  </header>
+  <head>
+    <meta charset="UTF-8" />
+    <title>News Transparency</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>News Transparency</h1>
+      <label class="switch">
+        <input type="checkbox" id="extensionEnabled" />
+        <span class="slider"></span>
+      </label>
+    </header>
 
-  <section id="controls">
-    <h2>Features</h2>
+    <section id="site-controls" class="card">
+      <div class="toggle-row">
+        <span id="currentSiteLabel" style="font-weight: 600; font-size: 13px"
+          >Current Site</span
+        >
+        <label class="switch">
+          <input type="checkbox" id="siteEnabled" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="hint">Enable extension for this website only.</div>
+    </section>
 
-    <label class="toggle-row">
-      <span>Ad Transparency Overlay</span>
-      <input type="checkbox" id="overlayEnabled" />
-    </label>
+    <section id="controls" class="card">
+      <h2>Global Settings</h2>
+      <label class="toggle-row">
+        <span>Ad Transparency Overlay</span>
+        <input type="checkbox" id="overlayEnabled" />
+      </label>
+      <label class="toggle-row">
+        <span>Focus Mode</span>
+        <input type="checkbox" id="focusModeEnabled" />
+      </label>
+      <label class="toggle-row">
+        <span>On-Hover Tooltip</span>
+        <input type="checkbox" id="tooltipEnabled" />
+      </label>
+      <label class="toggle-row">
+        <span>Transparency Panel</span>
+        <input type="checkbox" id="panelEnabled" />
+      </label>
+    </section>
 
-    <label class="toggle-row">
-      <span>Focus Mode</span>
-      <input type="checkbox" id="focusModeEnabled" />
-    </label>
+    <section class="card">
+      <details>
+        <summary><strong>Bulk Add Websites</strong></summary>
+        <div class="bulk-area">
+          <textarea
+            id="bulkInput"
+            placeholder="Paste URLs or domains here (one per line)...&#10;example.com&#10;cnn.com"
+          ></textarea>
+          <button id="btnBulkAdd">Add Sites</button>
+          <div id="bulkStatus" class="status-msg"></div>
+        </div>
+      </details>
+    </section>
 
-    <label class="toggle-row">
-      <span>On-Hover Tooltip</span>
-      <input type="checkbox" id="tooltipEnabled" />
-    </label>
+    <section id="legend" class="card">
+      <h2>Legend</h2>
+      <ul>
+        <li>
+          <span class="icon icon-news"></span> Genuine News (green circle)
+        </li>
+        <li>
+          <span class="icon icon-sponsored"></span> Sponsored Content (purple
+          square)
+        </li>
+        <li><span class="icon icon-ad"></span> Advertisement (red cross)</li>
+        <li><span class="icon icon-info"></span> Explanation tooltip</li>
+      </ul>
+    </section>
 
-    <label class="toggle-row">
-      <span>Transparency Panel</span>
-      <input type="checkbox" id="panelEnabled" />
-    </label>
-  </section>
-
-  <section id="legend">
-    <h2>Legend</h2>
-    <ul>
-      <li><span class="icon icon-news"></span> Genuine News (green circle)</li>
-      <li><span class="icon icon-sponsored"></span> Sponsored Content (purple square)</li>
-      <li><span class="icon icon-ad"></span> Advertisement (red cross)</li>
-      <li><span class="icon icon-info"></span> Explanation tooltip</li>
-    </ul>
-  </section>
-
-  <script src="popup.js"></script>
-</body>
+    <script src="popup.js"></script>
+  </body>
 </html>

@@ -1,516 +1,861 @@
-// ------------------------------
-// Settings
-// ------------------------------
+// CONFIGURATION & CONSTANTS
+
+const AD_DOMAINS = [
+  'doubleclick.net',
+  'googleadservices.com',
+  'outbrain.com',
+  'taboola.com',
+  'zemanta.com',
+  'dianomi.com',
+  'revcontent.com',
+  'adsystem.com',
+  'rubiconproject.com',
+  'pubmatic.com',
+  'adnxs.com',
+];
+
+const SPONSORED_KEYWORDS = [
+  'sponsored',
+  'paid content',
+  'paid partner',
+  'advertisement',
+  'promoted',
+];
+
+const WIDGET_SELECTORS = [
+  '.OUTBRAIN',
+  '.ob-widget',
+  '.trc_related_container',
+  '.taboola-container',
+  '.dianomi-container',
+  '.revcontent-network',
+  '[id*="google_ads_iframe"]',
+  '.commercial-unit',
+];
+
+const TYPE_AD = 'advisor-status-ad';
+const TYPE_NEWS = 'advisor-status-news';
+const TYPE_SPONSORED = 'advisor-status-sponsored';
+const TYPE_NEUTRAL = 'advisor-status-neutral';
+
+// STATE MANAGEMENT
+
 const DEFAULT_SETTINGS = {
   extensionEnabled: true,
   overlayEnabled: true,
   focusModeEnabled: false,
   tooltipEnabled: true,
-  panelEnabled: true
+  panelEnabled: true,
+  sitePreferences: {},
 };
 
 let currentSettings = { ...DEFAULT_SETTINGS };
-
-// Shared UI elements
 let tooltipEl = null;
 let panelEl = null;
 let panelBodyEl = null;
 
-// ------------------------------
-// Initialization
-// ------------------------------
+let linkObserver = null;
+let mutationObserver = null;
+
+//INITIALIZATION
+
 chrome.storage.sync.get(DEFAULT_SETTINGS, (stored) => {
   currentSettings = { ...DEFAULT_SETTINGS, ...stored };
-  if (currentSettings.extensionEnabled) {
-    initAdvisor();
-  }
-  applyFocusMode();
+  checkAndRun();
 });
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === "updateSettings") {
+  if (msg.type === 'updateSettings') {
     chrome.storage.sync.get(DEFAULT_SETTINGS, (stored) => {
       currentSettings = { ...DEFAULT_SETTINGS, ...stored };
-      if (currentSettings.extensionEnabled) {
-        initAdvisor();
-      } else {
-        cleanupAdvisor();
-      }
-      applyFocusMode();
+      checkAndRun();
     });
   }
 });
 
-// ------------------------------
-// Core
-// ------------------------------
+function checkAndRun() {
+  const hostname = window.location.hostname;
+  if (!currentSettings.extensionEnabled) {
+    cleanupAdvisor();
+    return;
+  }
+  const isSiteAllowed = currentSettings.sitePreferences[hostname] === true;
+  if (isSiteAllowed) {
+    initAdvisor();
+    applyFocusMode();
+  } else {
+    cleanupAdvisor();
+    document.body.classList.remove('news-focus-mode');
+  }
+}
+
 function initAdvisor() {
   ensureTooltip();
   ensurePanel();
-  annotatePage();
+
+  setupIntersectionObserver();
+  setupMutationObserver();
+
+  scanNewNodes([document.body]);
 }
 
 function cleanupAdvisor() {
-  // Remove badges
-  document.querySelectorAll(".advisor-badge").forEach((el) => el.remove());
+  if (linkObserver) linkObserver.disconnect();
+  if (mutationObserver) mutationObserver.disconnect();
 
-  // Remove data attributes
   document
-    .querySelectorAll("[data-advisor-type]")
-    .forEach((el) => el.removeAttribute("data-advisor-type"));
-  document
-    .querySelectorAll("[data-advisor-signals]")
-    .forEach((el) => el.removeAttribute("data-advisor-signals"));
+    .querySelectorAll('.advisor-anchor, .advisor-overlay-badge')
+    .forEach((el) => el.remove());
 
-  // Remove positioning class from headlines
   document
-    .querySelectorAll(".advisor-target")
-    .forEach((el) => el.classList.remove("advisor-target"));
+    .querySelectorAll('.advisor-group-sponsored, .advisor-group-ad')
+    .forEach((el) => {
+      el.classList.remove('advisor-group-sponsored', 'advisor-group-ad');
+    });
 
-  if (tooltipEl) tooltipEl.style.display = "none";
-  if (panelEl) panelEl.classList.remove("open");
+  document.querySelectorAll('[data-advisor-processed]').forEach((el) => {
+    delete el.dataset.advisorProcessed;
+  });
+
+  if (tooltipEl) tooltipEl.style.display = 'none';
+  if (panelEl) panelEl.classList.remove('open');
 }
 
 function applyFocusMode() {
   if (currentSettings.extensionEnabled && currentSettings.focusModeEnabled) {
-    document.body.classList.add("news-focus-mode");
+    document.body.classList.add('news-focus-mode');
   } else {
-    document.body.classList.remove("news-focus-mode");
+    document.body.classList.remove('news-focus-mode');
   }
 }
 
-/**
- * Main function:
- * 1. Find article/card blocks.
- * 2. For each block, find a single headline.
- * 3. Classify the block and attach ONE badge to the headline.
- */
-function annotatePage() {
-  if (!currentSettings.overlayEnabled) {
-    cleanupAdvisor();
+// OBSERVERS
+function setupIntersectionObserver() {
+  if (linkObserver) linkObserver.disconnect();
+
+  linkObserver = new IntersectionObserver(
+    (entries, observer) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const el = entry.target;
+          processSingleElement(el);
+          observer.unobserve(el);
+        }
+      });
+    },
+    {
+      rootMargin: '200px',
+    }
+  );
+}
+
+function setupMutationObserver() {
+  if (mutationObserver) mutationObserver.disconnect();
+
+  mutationObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        scanNewNodes(mutation.addedNodes);
+      }
+    }
+  });
+
+  mutationObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+}
+
+function scanNewNodes(nodeList) {
+  nodeList.forEach((node) => {
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+    const links = node.querySelectorAll('a, [data-href]');
+    links.forEach((link) => {
+      if (!link.dataset.advisorProcessed) linkObserver.observe(link);
+    });
+    if (
+      (node.tagName === 'A' || node.hasAttribute('data-href')) &&
+      !node.dataset.advisorProcessed
+    ) {
+      linkObserver.observe(node);
+    }
+
+    const frames = node.querySelectorAll('iframe');
+    frames.forEach((frame) => {
+      if (!frame.dataset.advisorProcessed) linkObserver.observe(frame);
+    });
+    if (node.tagName === 'IFRAME' && !node.dataset.advisorProcessed) {
+      linkObserver.observe(node);
+    }
+
+    const widgets = node.querySelectorAll(WIDGET_SELECTORS.join(','));
+    widgets.forEach((widget) => {
+      if (!widget.dataset.advisorProcessed) linkObserver.observe(widget);
+    });
+    if (
+      node.matches &&
+      node.matches(WIDGET_SELECTORS.join(',')) &&
+      !node.dataset.advisorProcessed
+    ) {
+      linkObserver.observe(node);
+    }
+  });
+}
+
+//CORE LOGIC
+
+function processSingleElement(el) {
+  if (el.dataset.advisorProcessed) return;
+
+  // WIDGET GROUP LOGIC
+  if (el.matches(WIDGET_SELECTORS.join(','))) {
+    // Iframe Widget (Black Box)
+    if (el.tagName === 'IFRAME') {
+      applyGroupStyling(el, TYPE_SPONSORED, {
+        summary: ['Sponsored Widget'],
+        details: [
+          'Content recommendation widget detected.',
+          'Contains external sponsored links.',
+        ],
+      });
+      el.dataset.advisorProcessed = 'true';
+      return;
+    }
+    // Shadow DOM Host (Black Box)
+    if (el.shadowRoot) {
+      applyGroupStyling(el, TYPE_SPONSORED, {
+        summary: ['Sponsored Widget (Shadow DOM)'],
+        details: [
+          'Widget uses Shadow DOM encapsulation.',
+          'Contents are hidden from main document.',
+          'Treated as single sponsored zone.',
+        ],
+      });
+      el.dataset.advisorProcessed = 'true';
+      return;
+    }
+    // Div Widget (Traversable) -> Ignore Container
+    el.dataset.advisorProcessed = 'true';
     return;
   }
 
-  const blocks = findArticleBlocks().filter(
-    (block) => !block.dataset.advisorType
+  // IFRAME LOGIC
+  if (el.tagName === 'IFRAME') {
+    processIframe(el);
+    return;
+  }
+
+  // LINK LOGIC
+  if (el.closest('nav') || el.closest('footer')) {
+    el.dataset.advisorProcessed = 'true';
+    return;
+  }
+
+  if (
+    el.closest('.advisor-group-sponsored') ||
+    el.closest('.advisor-group-ad')
+  ) {
+    el.dataset.advisorProcessed = 'true';
+    return;
+  }
+
+  const container = findClosestBlock(el);
+  const classification = classifyElement(el, container);
+
+  if (classification.type !== TYPE_NEUTRAL) {
+    applyBadge(el, classification);
+  }
+
+  el.dataset.advisorProcessed = 'true';
+}
+
+function processIframe(frame) {
+  if (
+    frame.closest('.advisor-group-sponsored') ||
+    frame.closest('.advisor-group-ad')
+  ) {
+    frame.dataset.advisorProcessed = 'true';
+    return;
+  }
+
+  const rawSrc = frame.getAttribute('src');
+  const src = rawSrc ? rawSrc.toLowerCase() : '';
+  const id = (frame.id || '').toLowerCase();
+
+  const currentHost = window.location.hostname.replace(/^www\./, '');
+  const domainParts = currentHost.split('.');
+  const rootDomain =
+    domainParts.length > 1 ? domainParts.slice(-2).join('.') : currentHost;
+
+  const matchedNetwork = AD_DOMAINS.find((domain) => src.includes(domain));
+  const matchedIdKeyword = ['google_ads', 'taboola', 'outbrain'].find((k) =>
+    id.includes(k)
   );
 
-  for (const block of blocks) {
-    const headline = findHeadlineWithinBlock(block);
-    if (!headline) continue;
+  let classification = null;
 
-    const result = classifyBlock(block);
+  // Empty/Blank Source
+  if (!src || src === 'about:blank') {
+    if (matchedIdKeyword) {
+      classification = {
+        type: TYPE_AD,
+        summary: ['Ad Iframe Detected'],
+        details: [
+          `Iframe ID contains "${matchedIdKeyword}".`,
+          'No source URL present.',
+        ],
+      };
+    } else {
+      classification = {
+        type: TYPE_SPONSORED,
+        summary: ['Dynamic Content'],
+        details: [
+          'Iframe has no source URL.',
+          'Likely dynamic script injection or tracking pixel.',
+        ],
+      };
+    }
+  }
+  // Known Ad Network
+  else if (matchedNetwork || matchedIdKeyword) {
+    classification = {
+      type: TYPE_AD,
+      summary: ['Ad Network Detected'],
+      details: [],
+    };
+    if (matchedNetwork)
+      classification.details.push(
+        `Source matches known ad network: "${matchedNetwork}"`
+      );
+    if (matchedIdKeyword)
+      classification.details.push(
+        `ID contains ad pattern: "${matchedIdKeyword}"`
+      );
+    classification.details.push('Element Type: <IFRAME>');
+  }
+  // Internal / Editorial
+  else if (src.includes(rootDomain)) {
+    classification = {
+      type: TYPE_NEWS,
+      summary: ['Internal Embed'],
+      details: [
+        `Embed source matches parent domain (${rootDomain})`,
+        'Assumed editorial content.',
+      ],
+    };
+  }
+  // Foreign / External
+  else {
+    classification = {
+      type: TYPE_SPONSORED,
+      summary: ['External Source'],
+      details: [
+        'Foreign iframe source detected.',
+        `Source: ${
+          src.startsWith('http') ? new URL(src).hostname : 'Relative/Unknown'
+        }`,
+        `Origin differs from current site (${rootDomain}).`,
+      ],
+    };
+  }
 
-    // mark block (for focus mode)
-    block.dataset.advisorType = result.type;
-    block.dataset.advisorSignals = JSON.stringify(result.signals);
+  if (classification) {
+    if (
+      classification.type === TYPE_AD ||
+      classification.type === TYPE_SPONSORED
+    ) {
+      applyGroupStyling(frame, classification.type, classification);
+    } else {
+      applyOverlayBadge(frame, classification.type, classification);
+    }
+  }
 
-    // mark headline (for tooltip/panel and for layout)
-    headline.dataset.advisorType = result.type;
-    headline.dataset.advisorSignals = JSON.stringify(result.signals);
-    headline.classList.add("advisor-target");
+  frame.dataset.advisorProcessed = 'true';
+}
 
-    createOrUpdateBadge(headline, result.type, result.signals);
+function classifyElement(element, container) {
+  const rawUrl =
+    element.tagName === 'A' ? element.href : element.getAttribute('data-href');
+  let fullUrl = '';
+  try {
+    fullUrl = new URL(rawUrl, window.location.origin).href.toLowerCase();
+  } catch (e) {
+    fullUrl = (rawUrl || '').toLowerCase();
+  }
+
+  const text = element.innerText.trim();
+  const containerText = container ? container.innerText.toLowerCase() : '';
+  const currentHost = window.location.hostname.replace('www.', '');
+
+  const matchedAdDomain = AD_DOMAINS.find((d) => fullUrl.includes(d));
+  if (matchedAdDomain) {
+    return {
+      type: TYPE_AD,
+      summary: ['Ad Network Link'],
+      details: [`Destination URL matches: "${matchedAdDomain}"`],
+    };
+  }
+
+  if (
+    fullUrl.includes('utm_source=outbrain') ||
+    fullUrl.includes('utm_source=taboola')
+  ) {
+    return {
+      type: TYPE_SPONSORED,
+      summary: ['Tracked Content'],
+      details: ['URL contains Outbrain/Taboola tracking parameters.'],
+    };
+  }
+
+  if (
+    fullUrl.includes('sponsored') ||
+    fullUrl.includes('paid-post') ||
+    fullUrl.includes('paidcontent')
+  ) {
+    return {
+      type: TYPE_SPONSORED,
+      summary: ['Sponsored Path'],
+      details: ['URL structure indicates paid content.'],
+    };
+  }
+
+  for (const keyword of SPONSORED_KEYWORDS) {
+    if (
+      containerText.includes(keyword) &&
+      !text.toLowerCase().includes(keyword)
+    ) {
+      return {
+        type: TYPE_SPONSORED,
+        summary: ['Sponsored Label'],
+        details: [`Nearby container text matched keyword: "${keyword}"`],
+      };
+    }
+  }
+
+  try {
+    const urlObj = new URL(fullUrl);
+    const linkHost = urlObj.hostname.replace('www.', '');
+    if (linkHost !== currentHost) {
+      return {
+        type: TYPE_SPONSORED,
+        summary: ['External Link'],
+        details: [`Link destination (${linkHost}) differs from current site.`],
+      };
+    }
+  } catch (e) {}
+
+  if (text.length === 0 || text.length < 15)
+    return { type: TYPE_NEUTRAL, summary: [], details: [] };
+
+  return {
+    type: TYPE_NEWS,
+    summary: ['Article Headline'],
+    details: ['Internal link.', 'Standard headline length.', 'No ad signals.'],
+  };
+}
+
+// UI GENERATION
+
+function applyBadge(targetElement, classification) {
+  if (targetElement.querySelector('.advisor-anchor')) return;
+  if (
+    targetElement.closest('.advisor-group-sponsored') ||
+    targetElement.closest('.advisor-group-ad')
+  )
+    return;
+
+  const injectionTarget = findInjectionPoint(targetElement);
+
+  const anchor = document.createElement('span');
+  anchor.className = 'advisor-anchor';
+
+  const badge = createBadgeElement(classification.type);
+  setupBadgeEvents(badge, targetElement, classification.type, classification);
+
+  anchor.appendChild(badge);
+  injectionTarget.appendChild(anchor);
+}
+
+function applyGroupStyling(targetElement, type, classification) {
+  targetElement.classList.add(`advisor-group-${type}`);
+  applyOverlayBadge(targetElement, type, classification);
+}
+
+function applyOverlayBadge(targetElement, type, classification) {
+  const isIframe = targetElement.tagName === 'IFRAME';
+  const isShadowHost = targetElement.shadowRoot !== null;
+  const injectOutside = isIframe || isShadowHost;
+
+  if (injectOutside) {
+    if (targetElement.parentElement.querySelector('.advisor-overlay-badge'))
+      return;
+  } else {
+    if (targetElement.querySelector('.advisor-overlay-badge')) return;
+  }
+
+  let parentToPosition = injectOutside
+    ? targetElement.parentElement
+    : targetElement;
+
+  const isTrapContainer =
+    parentToPosition.matches &&
+    parentToPosition.matches(
+      '.trc_rbox .sponsored, .ob-unit, .ob-rec-text-wrapper'
+    );
+
+  if (!isTrapContainer) {
+    const style = window.getComputedStyle(parentToPosition);
+    if (style.position === 'static') {
+      parentToPosition.style.position = 'relative';
+    }
+  }
+
+  const badge = createBadgeElement(type);
+  badge.classList.add('advisor-overlay-badge');
+  setupBadgeEvents(badge, targetElement, type, classification);
+
+  if (injectOutside) {
+    targetElement.parentElement.insertBefore(badge, targetElement);
+  } else {
+    targetElement.appendChild(badge);
   }
 }
 
-// ------------------------------
-// Block & headline detection
-// ------------------------------
+function createBadgeElement(type) {
+  const badge = document.createElement('span');
+  badge.className = `advisor-badge ${type}`;
+  let label = 'NEWS';
+  if (type === TYPE_AD) label = 'AD';
+  if (type === TYPE_SPONSORED) label = 'PAID';
+  badge.innerText = label;
+  return badge;
+}
 
-/**
- * Find "story blocks" that likely contain a headline and content.
- */
-function findArticleBlocks() {
-  const set = new Set();
-
-  // semantic article elements
-  document.querySelectorAll("article").forEach((el) => set.add(el));
-
-  // Typical card/story containers used on news sites
-  const blockSelectors = [
-    "div[class*='article']",
-    "div[class*='story']",
-    "div[class*='card']",
-    "section[class*='article']",
-    "section[class*='story']",
-    "section[class*='card']",
-    "li[class*='article']",
-    "li[class*='story']",
-    "li[class*='card']"
-  ];
-
-  blockSelectors.forEach((sel) =>
-    document.querySelectorAll(sel).forEach((el) => set.add(el))
-  );
-
-  // Fallback: blocks that are just big headline containers
-  document.querySelectorAll("main, section").forEach((el) => {
-    if (el.querySelector("h1, h2, h3")) set.add(el);
+function setupBadgeEvents(badge, targetSource, type, classificationData) {
+  badge.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openPanel(targetSource, type, classificationData);
   });
 
-  return Array.from(set);
+  if (tooltipEl) {
+    badge.addEventListener('mouseenter', (e) =>
+      showTooltip(e, type, classificationData.summary)
+    );
+    badge.addEventListener('mouseleave', hideTooltip);
+  }
 }
 
-/**
- * Inside a block, choose ONE primary headline element.
- */
-function findHeadlineWithinBlock(block) {
-  // explicit headline-like classes
-  const candidate =
-    block.querySelector(
-      "h1[class*='headline'], h2[class*='headline'], h3[class*='headline'], " +
-        "[class*='headline'], [class*='head-line'], [class*='title'], [data-headline]"
-    ) ||
-    block.querySelector("h1, h2, h3");
+// DOM HELPERS & UI
+function findInjectionPoint(rootElement) {
+  const candidates = rootElement.querySelectorAll(
+    'h1, h2, h3, h4, h5, h6, span, div, p, strong, b, em'
+  );
+  let bestCandidate = null;
+  let maxScore = 0;
 
-  return candidate || null;
+  candidates.forEach((el) => {
+    const text = el.innerText.trim();
+    const len = text.length;
+    if (len < 3) return;
+
+    let score = len;
+    if (/^H[1-6]/.test(el.tagName)) score += 50;
+    if (
+      (el.className || '').includes('title') ||
+      (el.className || '').includes('headline')
+    )
+      score += 20;
+
+    if (score >= maxScore) {
+      maxScore = score;
+      bestCandidate = el;
+    }
+  });
+  return bestCandidate || rootElement;
 }
 
-// ------------------------------
-// Classification using HTML-based heuristics
-// ------------------------------
-
-/**
- * Classify a block as "news" | "ad" | "sponsored".
- * Uses text, HTML, classes/ids/data attributes (block + ancestors), and links.
- */
-function classifyBlock(el) {
-  const text = (el.innerText || "").toLowerCase();
-  const html = (el.outerHTML || "").toLowerCase();
-  const signals = [];
-
-  const AD_KEYWORDS = [
-    "advertisement",
-    "advertiser",
-    "ad unit",
-    "ad choices",
-    "adchoice",
-    "sponsored ad",
-    "paid ad"
-  ];
-
-  const SPONSORED_KEYWORDS = [
-    "sponsored",
-    "sponsored content",
-    "sponsored by",
-    "paid content",
-    "partner content",
-    "presented by",
-    "brandvoice",
-    "promoted"
-  ];
-
-  const AD_NETWORKS = ["taboola", "outbrain", "zergnet", "revcontent"];
-  const CTA_KEYWORDS = [
-    "shop now",
-    "learn more",
-    "buy now",
-    "sign up",
-    "try now"
-  ];
-
-  let strongAd = false;
-  let sponsored = false;
-
-  // --- 1. Keyword checks in text / HTML ---
-  for (const kw of AD_KEYWORDS) {
-    if (text.includes(kw) || html.includes(kw)) {
-      strongAd = true;
-      signals.push(`Contains ad keyword "${kw}" in text/HTML`);
-    }
+function findClosestBlock(element) {
+  let el = element.parentElement;
+  let depth = 0;
+  while (el && depth < 4) {
+    if (['ARTICLE', 'LI', 'TD'].includes(el.tagName)) return el;
+    const cls = (el.className || '').toString().toLowerCase();
+    if (
+      cls.includes('card') ||
+      cls.includes('container') ||
+      cls.includes('story')
+    )
+      return el;
+    el = el.parentElement;
+    depth++;
   }
-
-  for (const kw of SPONSORED_KEYWORDS) {
-    if (text.includes(kw) || html.includes(kw)) {
-      sponsored = true;
-      signals.push(`Contains sponsored keyword "${kw}" in text/HTML`);
-    }
-  }
-
-  // --- 2. Ad networks in HTML ---
-  for (const net of AD_NETWORKS) {
-    if (html.includes(net)) {
-      strongAd = true;
-      signals.push(`Contains ad network identifier "${net}"`);
-    }
-  }
-
-  // --- 3. Attributes on block + ancestors ---
-  const checkNodeAttrs = (node, depthLabel) => {
-    if (!node) return;
-    const cls = (node.className || "").toLowerCase();
-    const id = (node.id || "").toLowerCase();
-    const dataset = node.dataset || {};
-    const attrString = `${cls} ${id} ${JSON.stringify(dataset).toLowerCase()}`;
-
-    if (/\b(ad|ads|advert|advertisement|adslot)\b/.test(attrString)) {
-      strongAd = true;
-      signals.push(
-        `Class/id/data attributes (${depthLabel}) contain ad-like tokens: "${attrString
-          .trim()
-          .slice(0, 80)}…"`
-      );
-    }
-
-    if (/\b(sponsored|sponsor|promo|promoted)\b/.test(attrString)) {
-      sponsored = true;
-      signals.push(
-        `Class/id/data attributes (${depthLabel}) contain sponsored tokens: "${attrString
-          .trim()
-          .slice(0, 80)}…"`
-      );
-    }
-  };
-
-  checkNodeAttrs(el, "block");
-  let ancestor = el.parentElement;
-  let hop = 1;
-  while (ancestor && hop <= 3) {
-    checkNodeAttrs(ancestor, `ancestor level ${hop}`);
-    ancestor = ancestor.parentElement;
-    hop++;
-  }
-
-  // --- 4. Links: affiliate patterns & CTAs ---
-  const links = Array.from(el.querySelectorAll("a[href]"));
-  const affiliatePatterns = ["utm_source=", "utm_campaign=", "affid=", "ref="];
-  let affiliateCount = 0;
-  let ctaCount = 0;
-
-  for (const a of links) {
-    const href = (a.getAttribute("href") || "").toLowerCase();
-    const linkText = (a.innerText || "").toLowerCase();
-
-    if (affiliatePatterns.some((p) => href.includes(p))) {
-      affiliateCount++;
-    }
-
-    if (CTA_KEYWORDS.some((kw) => linkText.includes(kw))) {
-      ctaCount++;
-    }
-  }
-
-  if (affiliateCount > 0) {
-    sponsored = true;
-    signals.push(`Contains ~${affiliateCount} affiliate-style links in this block`);
-  }
-
-  if (ctaCount > 0) {
-    signals.push(`Contains ~${ctaCount} strong call-to-action link(s)`);
-  }
-
-  // --- 5. Structural news cues ---
-  const hasTime = !!el.querySelector("time");
-  const hasByline =
-    /by\s+[a-z]+\s+[a-z]+/.test(text) || /by\s+[a-z]+/.test(text);
-  const wordCount = text.split(/\s+/).filter(Boolean).length;
-
-  if (hasTime) {
-    signals.push("Contains a <time> element (typical of news articles)");
-  }
-  if (hasByline) {
-    signals.push("Contains a byline-like pattern (e.g., 'By Author Name')");
-  }
-  if (wordCount > 150) {
-    signals.push(`Contains ~${wordCount} words (long-form text typical of articles)`);
-  }
-
-  // --- 6. Decide final type ---
-  let type = "news";
-
-  if (strongAd) {
-    type = "ad";
-  } else if (sponsored) {
-    type = "sponsored";
-  } else {
-    type = "news";
-    if (signals.length === 0) {
-      signals.push("No explicit ad/sponsored signals found – treated as news.");
-    }
-  }
-
-  return { type, signals };
-}
-
-// ------------------------------
-// UI Helpers: badge, tooltip, panel
-// ------------------------------
-function createOrUpdateBadge(headlineEl, type, signals) {
-  if (!currentSettings.overlayEnabled) return;
-
-  // Remove old badge on this headline if present
-  const oldBadge = headlineEl.querySelector(".advisor-badge");
-  if (oldBadge) oldBadge.remove();
-
-  const badge = document.createElement("div");
-  badge.className = `advisor-badge ${type}`;
-  badge.dataset.advisorType = type;
-
-  const shape = document.createElement("span");
-  shape.className = "shape";
-  badge.appendChild(shape);
-
-  const label = document.createElement("span");
-  label.textContent =
-    type === "news"
-      ? "News"
-      : type === "ad"
-      ? "Ad"
-      : "Sponsored";
-  badge.appendChild(label);
-
-  // Overlay visual is just shape + label.
-  // Tooltip and panel behavior is controlled by feature toggles:
-
-  if (currentSettings.tooltipEnabled) {
-    badge.addEventListener("mouseenter", (ev) => {
-      showTooltipForBlock(ev.clientX, ev.clientY, type, signals);
-    });
-    badge.addEventListener("mousemove", (ev) => {
-      moveTooltip(ev.clientX, ev.clientY);
-    });
-    badge.addEventListener("mouseleave", () => {
-      hideTooltip();
-    });
-  }
-
-  if (currentSettings.panelEnabled) {
-    badge.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      openPanelForHeadline(headlineEl, type, signals);
-    });
-  }
-
-  headlineEl.insertBefore(badge, headlineEl.firstChild);
+  return element.parentElement;
 }
 
 function ensureTooltip() {
-  if (tooltipEl) return;
-  tooltipEl = document.createElement("div");
-  tooltipEl.id = "advisor-tooltip";
+  if (document.getElementById('advisor-tooltip')) {
+    tooltipEl = document.getElementById('advisor-tooltip');
+    return;
+  }
+  tooltipEl = document.createElement('div');
+  tooltipEl.id = 'advisor-tooltip';
   document.body.appendChild(tooltipEl);
 }
 
-function showTooltipForBlock(x, y, type, signals) {
-  if (!tooltipEl || !currentSettings.tooltipEnabled) return;
-
-  tooltipEl.innerHTML = "";
-  const title = document.createElement("strong");
-  title.textContent =
-    type === "news"
-      ? "Classified as News"
-      : type === "ad"
-      ? "Classified as Ad"
-      : "Classified as Sponsored Content";
-  tooltipEl.appendChild(title);
-
-  const reason = document.createElement("div");
-  if (signals.length > 0) {
-    reason.textContent = `Reason: ${signals[0]}`;
-  } else {
-    reason.textContent = "Reason: Heuristic classification.";
-  }
-  tooltipEl.appendChild(reason);
-
-  tooltipEl.style.display = "block";
-  moveTooltip(x, y);
-}
-
-function moveTooltip(x, y) {
+function showTooltip(ev, type, summaryLines) {
   if (!tooltipEl) return;
-  const padding = 12;
-  tooltipEl.style.left = x + padding + "px";
-  tooltipEl.style.top = y + padding + "px";
+  const rect = ev.target.getBoundingClientRect();
+
+  let displayType = type.replace('advisor-status-', '').toUpperCase();
+
+  let html = `<strong>${displayType}</strong>`;
+  if (summaryLines && summaryLines.length > 0) {
+    html += `<ul style="margin:0;padding-left:12px;">`;
+    summaryLines.forEach((s) => (html += `<li>${s}</li>`));
+    html += '</ul>';
+  }
+  tooltipEl.innerHTML = html;
+  tooltipEl.style.display = 'block';
+  tooltipEl.style.top = `${rect.bottom + window.scrollY + 5}px`;
+  tooltipEl.style.left = `${rect.left + window.scrollX}px`;
 }
 
 function hideTooltip() {
-  if (!tooltipEl) return;
-  tooltipEl.style.display = "none";
+  if (tooltipEl) tooltipEl.style.display = 'none';
 }
 
 function ensurePanel() {
-  if (panelEl) return;
-
-  panelEl = document.createElement("div");
-  panelEl.id = "advisor-panel";
-
-  const header = document.createElement("div");
-  header.id = "advisor-panel-header";
-
-  const h2 = document.createElement("h2");
-  h2.textContent = "Transparency Panel";
-  header.appendChild(h2);
-
-  const closeBtn = document.createElement("button");
-  closeBtn.id = "advisor-panel-close";
-  closeBtn.textContent = "×";
-  closeBtn.addEventListener("click", () => {
-    panelEl.classList.remove("open");
-  });
-  header.appendChild(closeBtn);
-
-  panelBodyEl = document.createElement("div");
-  panelBodyEl.id = "advisor-panel-body";
-
-  panelEl.appendChild(header);
-  panelEl.appendChild(panelBodyEl);
-  document.body.appendChild(panelEl);
-}
-
-function openPanelForHeadline(headlineEl, type, signals) {
-  if (!panelEl || !currentSettings.panelEnabled) return;
-  panelBodyEl.innerHTML = "";
-
-  const block = findArticleBlocks().find((b) => b.contains(headlineEl)) || headlineEl;
-
-  const intro = document.createElement("p");
-  intro.textContent =
-    type === "news"
-      ? "This headline appears to be part of genuine news content based on the following signals:"
-      : type === "ad"
-      ? "This headline appears to be part of an advertisement based on the following signals:"
-      : "This headline appears to be part of sponsored/partner content based on the following signals:";
-  panelBodyEl.appendChild(intro);
-
-  const list = document.createElement("ul");
-  for (const s of signals) {
-    const li = document.createElement("li");
-    li.textContent = s;
-    list.appendChild(li);
-  }
-  panelBodyEl.appendChild(list);
-
-  const techHeader = document.createElement("h3");
-  techHeader.textContent = "Technical Signals (Snippet)";
-  panelBodyEl.appendChild(techHeader);
-
-  const snippet = document.createElement("code");
-  snippet.textContent = getElementSnippet(block);
-  panelBodyEl.appendChild(snippet);
-
-  panelEl.classList.add("open");
-}
-
-function getElementSnippet(el) {
-  const html = el.outerHTML || "";
-  return html.length > 500 ? html.slice(0, 500) + "…" : html;
-}
-
-// Re-run classification on DOM changes (for infinite scroll pages, etc.)
-const observer = new MutationObserver(() => {
-  if (!currentSettings.extensionEnabled || !currentSettings.overlayEnabled) {
+  if (document.getElementById('advisor-panel')) {
+    panelEl = document.getElementById('advisor-panel');
+    panelBodyEl = document.getElementById('advisor-panel-body');
     return;
   }
-  if (observer._pending) return;
-  observer._pending = true;
-  setTimeout(() => {
-    observer._pending = false;
-    annotatePage();
-  }, 1000);
+  panelEl = document.createElement('div');
+  panelEl.id = 'advisor-panel';
+  const header = document.createElement('div');
+  header.id = 'advisor-panel-header';
+  header.innerHTML =
+    '<h3>Transparency Report</h3> <button id="advisor-panel-close">×</button>';
+  panelEl.appendChild(header);
+  panelBodyEl = document.createElement('div');
+  panelBodyEl.id = 'advisor-panel-body';
+  panelEl.appendChild(panelBodyEl);
+  document.body.appendChild(panelEl);
+  document
+    .getElementById('advisor-panel-close')
+    .addEventListener('click', () => {
+      panelEl.classList.remove('open');
+    });
+}
+
+function openPanel(targetEl, type, classificationData) {
+  panelBodyEl.innerHTML = '';
+
+  let color = '#333';
+  let displayType = type.replace('advisor-status-', '').toUpperCase();
+  if (type === TYPE_NEWS) color = '#2ecc71';
+  if (type === TYPE_AD) color = '#e74c3c';
+  if (type === TYPE_SPONSORED) color = '#9b59b6';
+
+  const headerSection = document.createElement('div');
+  headerSection.className = 'advisor-panel-section';
+  headerSection.innerHTML = `
+    <h1 style="color: ${color}; margin: 0; font-size: 24px;">${displayType}</h1>
+    <p style="margin: 5px 0 0; color: #666; font-size: 12px;">Content Classification Report</p>
+  `;
+  panelBodyEl.appendChild(headerSection);
+
+  if (classificationData.details && classificationData.details.length > 0) {
+    const reasonSection = document.createElement('div');
+    reasonSection.className = 'advisor-panel-section';
+    reasonSection.innerHTML = `<h4>Classification Reasons</h4>`;
+    const ul = document.createElement('ul');
+    ul.className = 'advisor-reason-list';
+    classificationData.details.forEach((detail) => {
+      const li = document.createElement('li');
+      li.textContent = detail;
+      ul.appendChild(li);
+    });
+    reasonSection.appendChild(ul);
+    panelBodyEl.appendChild(reasonSection);
+  }
+
+  const rawUrl =
+    targetEl.tagName === 'A'
+      ? targetEl.href
+      : targetEl.getAttribute('src') || targetEl.getAttribute('data-href');
+
+  if (rawUrl && rawUrl.startsWith('http')) {
+    const urlSection = document.createElement('div');
+    urlSection.className = 'advisor-panel-section';
+    urlSection.innerHTML = `<h4>URL Evidence</h4>`;
+
+    try {
+      const url = new URL(rawUrl);
+      let html = `
+            <div class="advisor-url-breakdown">
+                <div class="advisor-url-row">
+                    <div class="advisor-url-label">Domain:</div>
+                    <div class="advisor-url-value">${url.hostname}</div>
+                </div>
+            </div>
+          `;
+
+      const params = [];
+      url.searchParams.forEach((val, key) => {
+        const lowerKey = key.toLowerCase();
+        if (
+          lowerKey.startsWith('utm_') ||
+          lowerKey === 'gclid' ||
+          lowerKey === 'fbclid'
+        ) {
+          params.push({ key, val, highlight: true });
+          return;
+        }
+        if (
+          lowerKey === 'redir' ||
+          lowerKey === 'redirect' ||
+          lowerKey === 'url' ||
+          lowerKey === 'dest'
+        ) {
+          params.push({ key, val, highlight: true });
+          return;
+        }
+        if (lowerKey.includes('click_id') || lowerKey === 'ref') {
+          params.push({ key, val, highlight: false });
+          return;
+        }
+      });
+
+      if (params.length > 0) {
+        html += `<div style="margin-top: 10px; font-weight:600; font-size:11px; color:#586069;">TRACKING & REDIRECTS:</div>`;
+        html += `<table class="advisor-param-table">`;
+        params.forEach((p) => {
+          const cls = p.highlight ? 'advisor-param-highlight' : '';
+          let displayVal = p.val;
+          if (
+            displayVal.startsWith('http%') ||
+            displayVal.startsWith('https%')
+          ) {
+            try {
+              displayVal = decodeURIComponent(displayVal);
+            } catch (e) {}
+          }
+          html += `<tr class="${cls}"><th>${p.key}</th><td>${displayVal}</td></tr>`;
+        });
+        html += `</table>`;
+      } else {
+        html += `<div style="margin-top: 10px; font-size:11px; color:#999; font-style:italic;">No tracking parameters detected.</div>`;
+      }
+
+      urlSection.innerHTML += html;
+      panelBodyEl.appendChild(urlSection);
+    } catch (e) {
+      const code = document.createElement('div');
+      code.className = 'advisor-code-block';
+      code.textContent = rawUrl;
+      urlSection.appendChild(code);
+      panelBodyEl.appendChild(urlSection);
+    }
+  }
+
+  const sourceSection = document.createElement('div');
+  sourceSection.className = 'advisor-panel-section';
+  sourceSection.innerHTML = `<h4>Element Source</h4>`;
+  const codeBlock = document.createElement('code');
+  codeBlock.className = 'advisor-code-block';
+  codeBlock.textContent =
+    targetEl.outerHTML.substring(0, 500) +
+    (targetEl.outerHTML.length > 500 ? '...' : '');
+  sourceSection.appendChild(codeBlock);
+  panelBodyEl.appendChild(sourceSection);
+
+  panelEl.classList.add('open');
+}
+
+// DIAGNOSTIC TOOL (Z-KEY)
+
+let isDebugModeActive = false;
+
+window.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() === 'z' && !isDebugModeActive) {
+    isDebugModeActive = true;
+    document.body.style.outline = '5px solid #ff9800';
+    document.body.style.cursor = 'help';
+  }
 });
 
-observer.observe(document.documentElement, {
-  childList: true,
-  subtree: true
+window.addEventListener('keyup', (e) => {
+  if (e.key.toLowerCase() === 'z') {
+    isDebugModeActive = false;
+    document.body.style.outline = '';
+    document.body.style.cursor = '';
+  }
 });
+
+function handleDiagnosticClick(e) {
+  if (!isDebugModeActive) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+
+  if (e.type === 'click' || e.type === 'contextmenu') {
+    runDiagnosticReport(e.target);
+  }
+  return false;
+}
+
+window.addEventListener('click', handleDiagnosticClick, { capture: true });
+window.addEventListener('mousedown', handleDiagnosticClick, { capture: true });
+window.addEventListener('mouseup', handleDiagnosticClick, { capture: true });
+window.addEventListener('contextmenu', handleDiagnosticClick, {
+  capture: true,
+});
+
+function runDiagnosticReport(clickedElement) {
+  console.clear();
+  console.group('ADVISOR DIAGNOSTIC REPORT');
+
+  const validLink = clickedElement.closest('a, [data-href]');
+  const validIframe = clickedElement.closest('iframe');
+  const targetElement = validLink || validIframe || clickedElement;
+
+  const isSelectedByCode = !!(validLink || validIframe);
+
+  if (isSelectedByCode) {
+    console.log('[PASS] SELECTOR MATCHED');
+    console.log('Target Found:', targetElement);
+  } else {
+    console.log('[FAIL] SELECTOR MISSED');
+    console.log('Element Clicked:', clickedElement);
+  }
+
+  let injectionPoint = null;
+  if (validIframe) {
+    injectionPoint = validIframe.parentElement;
+  } else {
+    injectionPoint = findInjectionPoint(targetElement);
+  }
+
+  if (injectionPoint) {
+    const oldOutline = injectionPoint.style.outline;
+    injectionPoint.style.outline = '4px solid #00bcd4';
+    setTimeout(() => {
+      injectionPoint.style.outline = oldOutline;
+    }, 1500);
+    console.log('[VISUAL] Flashing Injection Point');
+  } else {
+    console.log('[ERROR] No Injection Point Found');
+  }
+
+  const container = findClosestBlock(targetElement);
+  const result = classifyElement(targetElement, container);
+
+  console.log(`RESULT: ${result.type.toUpperCase()}`);
+  console.log('SUMMARY:', result.summary);
+  console.table(result.details);
+  console.groupEnd();
+}

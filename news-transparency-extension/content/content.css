@@ -1,159 +1,231 @@
-/* Badge container on top of each classified headline */
+/* Ghost Anchor */
+.advisor-anchor {
+  display: inline-flex;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  vertical-align: middle;
+  position: relative;
+  z-index: 2147483647;
+}
+
+/* The Badge (Base Style) */
 .advisor-badge {
   position: absolute;
-  top: 4px;
-  right: 4px;        /* TOP RIGHT CORNER OF HEADLINE */
-  left: auto;
-  z-index: 999999;
-  padding: 2px 6px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: system-ui, -apple-system, sans-serif !important;
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+  padding: 3px 6px !important;
+  border-radius: 4px !important;
+  border: none !important;
+  color: white !important;
+  white-space: nowrap !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-  background: rgba(0, 0, 0, 0.6);
+  z-index: 2147483647 !important;
 }
 
-/* We attach this class to headline elements so the badge positions correctly */
-.advisor-target {
-  position: relative !important;
+/* Overlay Badge */
+.advisor-overlay-badge {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  left: auto !important;
+  transform: none !important;
+  margin: 0 !important;
+  border-radius: 0 0 0 6px !important;
+  z-index: 2147483647 !important;
+  box-shadow: -1px 1px 3px rgba(0, 0, 0, 0.3) !important;
 }
 
-.advisor-badge .shape {
-  width: 14px;
-  height: 14px;
-  display: inline-block;
-  position: relative;
-  flex-shrink: 0;
+/* Group Styling */
+.advisor-group-advisor-status-sponsored {
+  border: 2px solid #9b59b6 !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+  contain: none !important;
 }
 
-/* Green circle = genuine news */
-.advisor-badge.news .shape {
-  background: #2ecc71;
-  border-radius: 50%;
+.advisor-group-advisor-status-ad {
+  border: 2px solid #e74c3c !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+  contain: none !important;
 }
 
-/* Purple square = sponsored content */
-.advisor-badge.sponsored .shape {
-  background: #8e44ad;
-  border-radius: 3px;
+/* Colors */
+.advisor-badge.advisor-status-news {
+  background-color: #2ecc71 !important;
+}
+.advisor-badge.advisor-status-ad {
+  background-color: #e74c3c !important;
+}
+.advisor-badge.advisor-status-sponsored {
+  background-color: #9b59b6 !important;
 }
 
-/* Red cross = ad */
-.advisor-badge.ad .shape {
-  border-radius: 2px;
+.advisor-badge:hover {
+  filter: brightness(1.1);
 }
 
-.advisor-badge.ad .shape::before,
-.advisor-badge.ad .shape::after {
-  content: "";
-  position: absolute;
-  top: 1px;
-  left: 6px;
-  width: 2px;
-  height: 12px;
-  background: #e74c3c;
-}
-
-.advisor-badge.ad .shape::after {
-  transform: rotate(90deg);
-}
-
-/* Focus Mode: de-emphasize ads/sponsored.
-   This will dim the whole card/article (we set data-advisor-type on the block). */
-body.news-focus-mode [data-advisor-type="ad"],
-body.news-focus-mode [data-advisor-type="sponsored"] {
-  opacity: 0.25 !important;
-  filter: grayscale(0.8) !important;
-}
-
-/* Tooltip bubble (for the separate tooltip feature) */
+/* --- Panel & Tooltip --- */
 #advisor-tooltip {
-  position: fixed;
-  z-index: 9999999;
-  max-width: 260px;
-  background: #1e1e24;
-  color: #ffffff;
+  position: absolute;
+  background: #222;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
   font-size: 12px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  z-index: 2147483647;
   display: none;
   pointer-events: none;
+  max-width: 250px;
 }
 
-#advisor-tooltip strong {
-  display: block;
-  margin-bottom: 4px;
-}
-
-/* Transparency Panel (sidebar) */
 #advisor-panel {
   position: fixed;
   top: 0;
-  right: 0;
-  width: 320px;
-  max-width: 90vw;
+  right: -360px;
+  width: 340px;
   height: 100vh;
-  background: #fdfdfd;
-  border-left: 1px solid #ddd;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
-  z-index: 9999998;
-  transform: translateX(100%);
-  transition: transform 0.25s ease-out;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f8f9fa;
+  z-index: 2147483647;
+  transition: right 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   display: flex;
   flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  box-shadow: -4px 0 15px rgba(0, 0, 0, 0.1);
+  border-left: 1px solid #e1e4e8;
 }
 
 #advisor-panel.open {
-  transform: translateX(0);
+  right: 0;
 }
 
 #advisor-panel-header {
-  padding: 10px 12px;
+  padding: 16px 20px;
+  background: #ffffff;
+  border-bottom: 1px solid #e1e4e8;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #eee;
-  background: #f4f4f8;
 }
 
-#advisor-panel-header h2 {
-  font-size: 14px;
+#advisor-panel-header h3 {
   margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
-
 #advisor-panel-close {
   border: none;
-  background: transparent;
-  font-size: 18px;
+  background: none;
+  font-size: 24px;
   cursor: pointer;
+  color: #586069;
+  padding: 0;
+  line-height: 1;
+}
+#advisor-panel-close:hover {
+  color: #000;
 }
 
 #advisor-panel-body {
-  padding: 10px 12px;
+  padding: 0;
   overflow-y: auto;
-  font-size: 13px;
+  flex: 1;
 }
 
-#advisor-panel-body h3 {
+.advisor-panel-section {
+  padding: 20px;
+  border-bottom: 1px solid #e1e4e8;
+  background: #fff;
+}
+
+.advisor-panel-section h4 {
+  margin: 0 0 10px 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #586069;
+  text-transform: uppercase;
+}
+
+.advisor-reason-list {
+  margin: 0;
+  padding-left: 20px;
+  color: #24292e;
   font-size: 13px;
-  margin-top: 10px;
+  line-height: 1.5;
+}
+.advisor-reason-list li {
   margin-bottom: 4px;
 }
 
-#advisor-panel-body ul {
-  padding-left: 18px;
+.advisor-code-block {
+  background: #f6f8fa;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  padding: 10px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 11px;
+  color: #24292e;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 150px;
+  overflow-y: auto;
+  display: block;
 }
 
-#advisor-panel-body code {
-  background: #efefef;
-  padding: 1px 3px;
-  border-radius: 3px;
+.advisor-url-breakdown {
   font-size: 12px;
+}
+.advisor-url-row {
+  display: flex;
+  margin-bottom: 6px;
+  border-bottom: 1px dotted #eee;
+  padding-bottom: 4px;
+}
+.advisor-url-label {
+  font-weight: 600;
+  width: 60px;
+  flex-shrink: 0;
+  color: #586069;
+}
+.advisor-url-value {
+  word-break: break-all;
+  color: #0366d6;
+  font-family: monospace;
+}
+
+/* Tracking Params */
+.advisor-param-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin-top: 5px;
+}
+.advisor-param-table th {
+  text-align: left;
+  color: #586069;
+  border-bottom: 1px solid #ddd;
+  padding: 4px;
+}
+.advisor-param-table td {
+  border-bottom: 1px solid #eee;
+  padding: 4px;
+  font-family: monospace;
+  word-break: break-all;
+}
+.advisor-param-highlight {
+  background-color: #fffbdd;
+  color: #b08800;
+  font-weight: bold;
 }
