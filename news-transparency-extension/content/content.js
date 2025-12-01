@@ -28,7 +28,7 @@ const WIDGET_SELECTORS = [
   '.taboola-container',
   '.dianomi-container',
   '.revcontent-network',
-  '[id*="google_ads_iframe"]',
+  // '[id*="google_ads_iframe"]',
   '.commercial-unit',
 ];
 
@@ -311,12 +311,15 @@ function processIframe(frame) {
 
   // Empty/Blank Source
   if (!src || src === 'about:blank') {
-    if (matchedIdKeyword) {
+    if (matchedIdKeyword || !id) {
+      let matchedVar = matchedIdKeyword
+        ? matchedIdKeyword
+        : 'no specific source provider';
       classification = {
         type: TYPE_AD,
         summary: ['Ad Iframe Detected'],
         details: [
-          `Iframe ID contains "${matchedIdKeyword}".`,
+          `Iframe ID contains "${matchedVar}".`,
           'No source URL present.',
         ],
       };
@@ -784,9 +787,10 @@ function openPanel(targetEl, type, classificationData) {
   sourceSection.innerHTML = `<h4>Element Source</h4>`;
   const codeBlock = document.createElement('code');
   codeBlock.className = 'advisor-code-block';
-  codeBlock.textContent =
-    targetEl.outerHTML.substring(0, 500) +
-    (targetEl.outerHTML.length > 500 ? '...' : '');
+  codeBlock.textContent = targetEl.outerHTML;
+  // codeBlock.textContent =
+  //   targetEl.outerHTML.substring(0, 800) +
+  //   (targetEl.outerHTML.length > 800 ? '...' : '');
   sourceSection.appendChild(codeBlock);
   panelBodyEl.appendChild(sourceSection);
 

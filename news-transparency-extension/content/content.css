@@ -230,7 +230,7 @@
 }
 
 /* prob don't need this fixed elsewhere: CLIPPING ESCAPE HATCH */
-.trc_rbox .sponsored,
+/* .trc_rbox .sponsored,
 .ob-widget .ob-unit,
 .ob-widget .ob-rec-text-wrapper,
 .ob-widget .ob-rec-source-wrapper {
@@ -238,7 +238,7 @@
   transform: none !important;
   opacity: 1 !important;
   overflow: visible !important;
-}
+} */
 
 /* FOCUS MODE */
 body.news-focus-mode [data-advisor-status='advisor-status-ad'],
