@@ -2,15 +2,19 @@
 const AD_DOMAINS = [
   'doubleclick.net',
   'googleadservices.com',
+  'adsystem.com',
+  'rubiconproject.com',
+  'pubmatic.com',
+  'adnxs.com',
+];
+
+// For Content Recommendation Networks
+const SPONSORED_DOMAINS = [
   'outbrain.com',
   'taboola.com',
   'zemanta.com',
   'dianomi.com',
   'revcontent.com',
-  'adsystem.com',
-  'rubiconproject.com',
-  'pubmatic.com',
-  'adnxs.com',
 ];
 
 const SPONSORED_KEYWORDS = [
@@ -303,9 +307,10 @@ function processIframe(frame) {
     domainParts.length > 1 ? domainParts.slice(-2).join('.') : currentHost;
 
   const matchedNetwork = AD_DOMAINS.find((domain) => src.includes(domain));
-  const matchedIdKeyword = ['google_ads', 'taboola', 'outbrain'].find((k) =>
-    id.includes(k)
+  const matchedSponsoredNetwork = SPONSORED_DOMAINS.find((domain) =>
+    src.includes(domain)
   );
+  const matchedIdKeyword = ['google_ads'].find((k) => id.includes(k));
 
   let classification = null;
 
@@ -333,6 +338,15 @@ function processIframe(frame) {
         ],
       };
     }
+  } else if (matchedSponsoredNetwork) {
+    classification = {
+      type: TYPE_SPONSORED,
+      summary: ['Sponsored Content'],
+      details: [
+        `Source matches sponsored network: "${matchedSponsoredNetwork}"`,
+        'Content recommendation engine.',
+      ],
+    };
   }
   // Known Ad Network
   else if (matchedNetwork || matchedIdKeyword) {
@@ -407,6 +421,15 @@ function classifyElement(element, container) {
   const text = element.innerText.trim();
   const containerText = container ? container.innerText.toLowerCase() : '';
   const currentHost = window.location.hostname.replace('www.', '');
+
+  const matchedSponsored = SPONSORED_DOMAINS.find((d) => fullUrl.includes(d));
+  if (matchedSponsored) {
+    return {
+      type: TYPE_SPONSORED,
+      summary: ['Sponsored Content'],
+      details: [`Destination matches sponsored network: "${matchedSponsored}"`],
+    };
+  }
 
   const matchedAdDomain = AD_DOMAINS.find((d) => fullUrl.includes(d));
   if (matchedAdDomain) {
